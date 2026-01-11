@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 日志文件路径 -->
+    <property name="LOG_PATH" value="/app/logs"/>
+    <property name="LOG_FILE" value="${LOG_PATH}/sync.log"/>
+
+    <!-- 日志格式 -->
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n%ex"/>
+
+    <!-- 文件输出 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+
+        <!-- 滚动策略 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/sync.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- 只输出到文件，不输出到控制台 -->
+    <root level="INFO">
+        <appender-ref ref="FILE"/>
+    </root>
+
+    <!-- 应用日志 -->
+    <logger name="com.btsearch" level="INFO"/>
+
+    <!-- Spring框架日志 -->
+    <logger name="org.springframework" level="WARN"/>
+
+    <!-- Elasticsearch日志 -->
+    <logger name="org.elasticsearch" level="WARN"/>
+    <logger name="org.springframework.data.elasticsearch" level="WARN"/>
+
+    <!-- Hibernate日志 -->
+    <logger name="org.hibernate" level="WARN"/>
+</configuration>

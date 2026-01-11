@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitTorrent 磁力搜索</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding-top: 60px;
+        }
+        /* Navigation Bar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            height: 60px;
+        }
+        .navbar-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar-brand {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .navbar-nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .navbar-nav a {
+            color: #666;
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .navbar-nav a:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.08);
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 13px;
+            padding: 6px 12px;
+            background: #f5f5f5;
+            border-radius: 20px;
+        }
+        .user-name {
+            font-weight: 600;
+            color: #667eea;
+        }
+        .user-role {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            background: #e0e0e0;
+            font-weight: 600;
+        }
+        .user-role.admin {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .stats {
+            color: rgba(255,255,255,0.9);
+            font-size: 0.9em;
+        }
+        .search-box {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .search-input:focus {
+            border-color: #667eea;
+        }
+        .search-btn {
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .search-btn:hover {
+            transform: translateY(-2px);
+        }
+        .search-btn:active {
+            transform: translateY(0);
+        }
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .filter {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .filter select {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .results {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+        }
+        .results.active {
+            display: block;
+        }
+        .result-info {
+            color: #666;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .torrent-item {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        .torrent-item:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .torrent-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+        .torrent-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .meta-label {
+            font-weight: bold;
+            color: #999;
+        }
+        .seeders {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .leechers {
+            color: #f44336;
+        }
+        .file-list-toggle {
+            margin-top: 10px;
+        }
+        .file-list-toggle button {
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .file-list-toggle button:hover {
+            background: #764ba2;
+        }
+        .load-more-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+            width: 100%;
+        }
+        .load-more-btn:hover {
+            background: #45a049;
+        }
+        .load-more-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .file-list-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .file-list {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+        .file-list.active {
+            display: block;
+        }
+        .file-list-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .file-item {
+            padding: 8px 12px;
+            background: white;
+            border-radius: 3px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+        .file-name {
+            color: #333;
+            word-break: break-all;
+            flex: 1;
+            margin-right: 15px;
+        }
+        .file-size {
+            color: #666;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .magnet-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .magnet-link:hover {
+            background: #764ba2;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .pagination button {
+            padding: 10px 20px;
+            border: 1px solid #e0e0e0;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination .active {
+            background: #667eea;
+            color: white;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .no-files {
+            color: #999;
+            font-style: italic;
+            padding: 10px;
+        }
+        mark {
+            background-color: #ffeb3b;
+            color: #333;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="navbar-brand">🔍 BitTorrent 磁力搜索</a>
+            <div class="navbar-nav" id="navbarNav">
+                <!-- Dynamic content will be inserted here -->
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header">
+            <h1>🔍 BitTorrent 磁力搜索</h1>
+            <div class="stats" id="stats">加载中...</div>
+        </div>
+
+        <div class="search-box">
+            <form class="search-form" id="searchForm">
+                <input type="text" class="search-input" id="keyword" placeholder="输入搜索关键词..." required>
+                <button type="submit" class="search-btn">搜索</button>
+            </form>
+            <div class="filters">
+                <div class="filter">
+                    <label>排序:</label>
+                    <select id="sort">
+                        <option value="seeders">做种数</option>
+                        <option value="time">时间</option>
+                        <option value="size">大小</option>
+                    </select>
+                </div>
+                <div class="filter">
+                    <label>顺序:</label>
+                    <select id="order">
+                        <option value="desc">降序</option>
+                        <option value="asc">升序</option>
+                    </select>
+                </div>
+                <div class="filter">
+                    <label>每页:</label>
+                    <select id="pageSize">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script th:inline="none">
+        // Check login status and update navbar
+        function updateNavbar() {
+            const token = localStorage.getItem('token');
+            const username = localStorage.getItem('username');
+            const role = localStorage.getItem('role');
+            const navbarNav = document.getElementById('navbarNav');
+
+            if (token && username) {
+                let html = `
+                    <div class="user-info">
+                        <span class="user-name">${escapeHtml(username)}</span>
+                        <span class="user-role ${role === 'ADMIN' ? 'admin' : ''}">${role === 'ADMIN' ? '管理员' : '用户'}</span>
+                    </div>
+                    ${role === 'ADMIN' ? '<a href="/admin/users">用户管理</a>' : ''}
+                    <a href="#" onclick="logout()">退出</a>
+                `;
+                navbarNav.innerHTML = html;
+            } else {
+                navbarNav.innerHTML = '<a href="/login">登录</a><a href="/login">注册</a>';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            localStorage.removeItem('role');
+            updateNavbar();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Update navbar on page load
+        updateNavbar();
+
+        let currentPage = 1;
+        let currentKeyword = '';
+        let currentSort = 'seeders';
+        let currentOrder = 'desc';
+        let currentPageSize = 20;
+        let expandedFileLists = new Set();
+        // Store file list data for each torrent: { uniqueId: { files: [], currentPage: 1, pageSize: 100 } }
+        let fileListData = {};
+        const FILE_PAGE_SIZE = 100;
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/v1/stats');
+                const data = await response.json();
+                document.getElementById('stats').textContent =
+                    `已索引 ${data.totalTorrents.toLocaleString()} 个种子`;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Search function
+        async function search(page = 1) {
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) return;
+
+            currentPage = page;
+            currentKeyword = keyword;
+            currentSort = document.getElementById('sort').value;
+            currentOrder = document.getElementById('order').value;
+            currentPageSize = parseInt(document.getElementById('pageSize').value);
+
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('resultsContent');
+
+            resultsDiv.classList.add('active');
+            contentDiv.innerHTML = '<div class="loading">搜索中...</div>';
+
+            try {
+                const params = new URLSearchParams({
+                    keyword: keyword,
+                    page: page,
+                    size: currentPageSize,
+                    sort: currentSort,
+                    order: currentOrder
+                });
+
+                const response = await fetch(`/api/v1/search?${params}`);
+                const data = await response.json();
+
+                displayResults(data);
+            } catch (error) {
+                contentDiv.innerHTML = `<div class="error">搜索失败: ${error.message}</div>`;
+            }
+        }
+
+        // Display results
+        function displayResults(data) {
+            const contentDiv = document.getElementById('resultsContent');
+
+            // Clear previous file list data
+            fileListData = {};
+
+            if (data.total === 0) {
+                contentDiv.innerHTML = '<div class="no-results">未找到相关结果</div>';
+                return;
+            }
+
+            let html = `
+                <div class="result-info">
+                    找到 <strong>${data.total.toLocaleString()}</strong> 个结果
+                    (耗时 ${data.took}ms, 第 ${data.page}/${data.totalPages} 页)
+                </div>
+            `;
+
+            data.results.forEach((item, index) => {
+                const uniqueId = `filelist-${index}`;
+                const hasFiles = item.fileList && item.fileList.length > 0;
+                const hasHighlightFiles = item.highlightedFileList && item.highlightedFileList.length > 0;
+
+                // Store file list data in JavaScript (not in HTML)
+                if (hasFiles) {
+                    fileListData[uniqueId] = {
+                        files: hasHighlightFiles ? item.highlightedFileList : item.fileList,
+                        currentPage: 1,
+                        pageSize: FILE_PAGE_SIZE
+                    };
+                }
+
+                html += `
+                    <div class="torrent-item">
+                        <div class="torrent-name">${item.highlightedName ? item.highlightedName : escapeHtml(item.name)}</div>
+                        <div class="torrent-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">大小:</span>
+                                <span>${item.sizeFormatted}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">做种:</span>
+                                <span class="seeders">${item.seeders || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">下载:</span>
+                                <span class="leechers">${item.leechers || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">文件:</span>
+                                <span>${item.files || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">时间:</span>
+                                <span>${item.createTimeFormatted || '未知'}</span>
+                            </div>
+                            ${item.detectedLanguages && item.detectedLanguages.length > 0 ? `
+                            <div class="meta-item">
+                                <span class="meta-label">语言:</span>
+                                <span>${item.detectedLanguages.join(', ')}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ${hasFiles ? `
+                        <div class="file-list-toggle">
+                            <button onclick="toggleFileList('${uniqueId}')">
+                                📁 查看文件列表 (${item.fileList.length} 个文件)
+                            </button>
+                        </div>
+                        <div class="file-list" id="${uniqueId}">
+                            <div class="file-list-title">文件列表:</div>
+                            <div class="file-list-container" id="${uniqueId}-container"></div>
+                            <button class="load-more-btn" id="${uniqueId}-loadmore" onclick="loadMoreFiles('${uniqueId}')"></button>
+                        </div>
+                        ` : '<div class="no-files">无文件列表信息</div>'}
+                        <a href="${item.magnetUri}" class="magnet-link">🧲 磁力链接</a>
+                    </div>
+                `;
+            });
+
+            // Pagination
+            if (data.totalPages > 1) {
+                html += '<div class="pagination">';
+
+                // Previous button
+                if (data.page > 1) {
+                    html += `<button onclick="search(${data.page - 1})">上一页</button>`;
+                }
+
+                // Page numbers
+                const startPage = Math.max(1, data.page - 2);
+                const endPage = Math.min(data.totalPages, data.page + 2);
+
+                if (startPage > 1) {
+                    html += `<button onclick="search(1)">1</button>`;
+                    if (startPage > 2) {
+                        html += `<span>...</span>`;
+                    }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    const activeClass = i === data.page ? 'active' : '';
+                    html += `<button class="${activeClass}" onclick="search(${i})">${i}</button>`;
+                }
+
+                if (endPage < data.totalPages) {
+                    if (endPage < data.totalPages - 1) {
+                        html += `<span>...</span>`;
+                    }
+                    html += `<button onclick="search(${data.totalPages})">${data.totalPages}</button>`;
+                }
+
+                // Next button
+                if (data.page < data.totalPages) {
+                    html += `<button onclick="search(${data.page + 1})">下一页</button>`;
+                }
+
+                html += '</div>';
+            }
+
+            contentDiv.innerHTML = html;
+        }
+
+        // Toggle file list
+        function toggleFileList(id) {
+            const element = document.getElementById(id);
+            if (element.classList.contains('active')) {
+                element.classList.remove('active');
+            } else {
+                element.classList.add('active');
+                // Render first page when opening
+                renderFilePage(id, 1);
+            }
+        }
+
+        // Render a page of files
+        function renderFilePage(id, page) {
+            const data = fileListData[id];
+            if (!data) return;
+
+            const container = document.getElementById(id + '-container');
+            const loadMoreBtn = document.getElementById(id + '-loadmore');
+
+            const startIndex = 0;
+            const endIndex = page * data.pageSize;
+            const filesToShow = data.files.slice(startIndex, endIndex);
+
+            // Render files
+            container.innerHTML = filesToShow.map(file => `
+                <div class="file-item">
+                    <div class="file-name">${file.path}</div>
+                    ${file.size ? `<div class="file-size">${formatFileSize(file.size)}</div>` : ''}
+                </div>
+            `).join('');
+
+            // Update load more button
+            const remaining = data.files.length - endIndex;
+            if (remaining > 0) {
+                loadMoreBtn.textContent = `加载更多 (剩余 ${remaining} 个文件)`;
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.style.display = 'block';
+            } else {
+                loadMoreBtn.textContent = '已显示全部文件';
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.style.display = 'block';
+            }
+
+            // Update current page
+            data.currentPage = page;
+        }
+
+        // Load more files
+        function loadMoreFiles(id) {
+            const data = fileListData[id];
+            if (!data) return;
+
+            const nextPage = data.currentPage + 1;
+            renderFilePage(id, nextPage);
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Form submit
+        document.getElementById('searchForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            search(1);
+        });
+
+        // Load stats on page load
+        loadStats();
+        setInterval(loadStats, 30000); // Update stats every 30 seconds
+    </script>
+</body>
+</html>

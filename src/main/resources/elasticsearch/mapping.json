@@ -1,0 +1,93 @@
+{
+  "settings": {
+    "number_of_shards": 5,
+    "number_of_replicas": 1,
+    "index": {
+      "refresh_interval": "30s"
+    },
+    "analysis": {
+      "analyzer": {
+        "ik_max_word_analyzer": {
+          "type": "custom",
+          "tokenizer": "ik_max_word"
+        },
+        "ik_smart_analyzer": {
+          "type": "custom",
+          "tokenizer": "ik_smart"
+        },
+        "standard_analyzer": {
+          "type": "standard"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "infoHash": {
+        "type": "keyword"
+      },
+      "name": {
+        "type": "text",
+        "analyzer": "standard_analyzer",
+        "fields": {
+          "chinese": {
+            "type": "text",
+            "analyzer": "ik_max_word_analyzer",
+            "search_analyzer": "ik_smart_analyzer"
+          },
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "detectedLanguages": {
+        "type": "keyword"
+      },
+      "size": {
+        "type": "long"
+      },
+      "seeders": {
+        "type": "integer"
+      },
+      "leechers": {
+        "type": "integer"
+      },
+      "peers": {
+        "type": "integer"
+      },
+      "files": {
+        "type": "integer"
+      },
+      "createTime": {
+        "type": "date",
+        "format": "epoch_millis"
+      },
+      "lang": {
+        "type": "byte"
+      },
+      "magnetUri": {
+        "type": "keyword",
+        "index": false
+      },
+      "fileList": {
+        "type": "nested",
+        "properties": {
+          "path": {
+            "type": "text",
+            "analyzer": "standard_analyzer",
+            "fields": {
+              "chinese": {
+                "type": "text",
+                "analyzer": "ik_smart_analyzer"
+              }
+            }
+          },
+          "size": {
+            "type": "long"
+          }
+        }
+      }
+    }
+  }
+}

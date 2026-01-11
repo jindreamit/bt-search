@@ -1,0 +1,29 @@
+FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
+
+WORKDIR /build
+
+# Copy Maven files
+COPY pom.xml .
+COPY src ./src
+
+# Build with Aliyun mirror
+RUN mvn clean package -DskipTests --no-transfer-progress
+
+FROM eclipse-temurin:17-jre-alpine
+
+RUN addgroup -S spring && adduser -S spring -G spring
+
+WORKDIR /app
+
+# Create logs directory
+RUN mkdir -p /app/logs && chown -R spring:spring /app/logs
+
+COPY --from=builder /build/target/bt-search.jar app.jar
+
+ENV JAVA_OPTS="-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+ENV LOGGING_CONFIG="classpath:logback-sync.xml"
+
+USER spring:spring
+
+# Run sync application (specify SyncApplication as main class)
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -Dlogging.config=$LOGGING_CONFIG -Dspring.profiles.active=sync -Dloader.main=com.btsearch.SyncApplication -jar app.jar"]

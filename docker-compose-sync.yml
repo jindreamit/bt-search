@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  bt-sync:
+    build:
+      context: /mnt/nvme/app/bt-search
+      dockerfile: docker/Dockerfile.sync
+    image: bt-sync-app:latest
+    container_name: bt-sync-app
+    network_mode: host
+    environment:
+      - SPRING_MAIN_WEB_APPLICATION_TYPE=none
+      - SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/forge?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=Shijin1221.nb
+      - SPRING_ELASTICSEARCH_URIS=http://localhost:9200
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
+      - SPRING_JPA_SHOW_SQL=false
+      - LOGGING_CONFIG=classpath:logback-sync.xml
+      - JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    volumes:
+      - /mnt/nvme/app/bt-search/logs:/app/logs
+    restart: "no"
+    # Single run - exits after sync completes

@@ -407,6 +407,16 @@
                 height: 45px;
                 font-size: 20px;
             }
+            .loading-more {
+                padding: 40px 20px;
+                text-align: center;
+            }
+            .no-more {
+                padding: 40px 20px;
+                text-align: center;
+                color: #999;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -501,7 +511,10 @@
             if (!isMobile) return;
 
             window.removeEventListener('scroll', handleScroll);
-            window.addEventListener('scroll', handleScroll);
+            // Only add scroll listener if there might be more results
+            if (hasMore) {
+                window.addEventListener('scroll', handleScroll);
+            }
         }
 
         function handleScroll() {
@@ -771,6 +784,7 @@
 
                 if (isMobile) {
                     setupInfiniteScroll();
+                    updateMobileLoadingStatus();
                 }
             } catch (error) {
                 if (!append) {
@@ -780,6 +794,19 @@
             } finally {
                 isLoading = false;
                 document.getElementById('loadingMore').classList.remove('visible');
+            }
+        }
+
+        // Update mobile loading status (show "no more" message)
+        function updateMobileLoadingStatus() {
+            if (!isMobile) return;
+
+            const loadingMore = document.getElementById('loadingMore');
+            if (loadingMore) {
+                if (!hasMore && currentPage > 1) {
+                    loadingMore.textContent = '— 已加载全部结果 —';
+                    loadingMore.classList.add('visible');
+                }
             }
         }
 
@@ -876,8 +903,8 @@
                 contentDiv.appendChild(tempDiv.firstChild);
             }
 
-            // Pagination for PC (now uses URL navigation)
-            if (!append && data.totalPages > 1) {
+            // Pagination for PC (now uses URL navigation) - skip on mobile
+            if (!isMobile && !append && data.totalPages > 1) {
                 html = '<div class="pagination">';
 
                 if (data.page > 1) {
@@ -914,6 +941,14 @@
                 const paginationDiv = document.createElement('div');
                 paginationDiv.innerHTML = html;
                 contentDiv.appendChild(paginationDiv);
+            }
+
+            // Mobile: Show "no more results" message if this is the last page
+            if (isMobile && !append && data.page >= data.totalPages) {
+                const noMoreDiv = document.createElement('div');
+                noMoreDiv.className = 'loading-more no-more';
+                noMoreDiv.textContent = '— 已加载全部结果 —';
+                contentDiv.appendChild(noMoreDiv);
             }
         }
 

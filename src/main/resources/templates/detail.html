@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>种子详情</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .container {
+            padding: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .torrent-info {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .torrent-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+        .torrent-meta {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .meta-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 3px;
+        }
+        .meta-value {
+            font-size: 14px;
+            color: #333;
+        }
+        .seeders {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .leechers {
+            color: #f44336;
+        }
+        .file-list-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .file-list-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .file-list {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 12px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 13px;
+        }
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+        .file-name {
+            color: #333;
+            word-break: break-all;
+            flex: 1;
+            margin-right: 15px;
+            line-height: 1.4;
+        }
+        .file-size {
+            color: #666;
+            font-weight: bold;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+        .magnet-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 12px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 99;
+        }
+        .magnet-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .magnet-btn:active {
+            transform: scale(0.98);
+        }
+        .magnet-btn.copied {
+            background: #4caf50;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            text-align: center;
+        }
+        .no-files {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+            font-style: italic;
+        }
+        mark {
+            background-color: #ffeb3b;
+            color: #333;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="goBack()">← 返回</button>
+            <span>种子详情</span>
+            <div style="width: 60px;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="content">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <div class="magnet-section" id="magnetSection" style="display:none;">
+        <button class="magnet-btn" id="magnetBtn" onclick="copyMagnet()">🧲 复制磁力链接</button>
+    </div>
+
+    <script th:inline="none">
+        let torrentData = null;
+        let currentFilePage = 1;
+        const FILE_PAGE_SIZE = 100;
+        let displayedFiles = 0;
+
+        // Get torrent ID from URL
+        function getTorrentId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        // Go back to previous page
+        function goBack() {
+            if (document.referrer) {
+                window.history.back();
+            } else {
+                window.location.href = '/';
+            }
+        }
+
+        // Load torrent details
+        async function loadTorrentDetails() {
+            const torrentId = getTorrentId();
+            if (!torrentId) {
+                showError('缺少种子ID');
+                return;
+            }
+
+            try {
+                // Fetch torrent details from search API with the ID
+                const params = new URLSearchParams(window.location.search);
+                const keyword = params.get('q') || '';
+                const page = params.get('p') || '1';
+                const sort = params.get('s') || 'seeders';
+                const order = params.get('o') || 'desc';
+
+                const searchParams = new URLSearchParams({
+                    keyword: keyword,
+                    page: page,
+                    size: 100,
+                    sort: sort,
+                    order: order
+                });
+
+                const response = await fetch(`/api/v1/search?${searchParams}`);
+                const data = await response.json();
+
+                // Find the torrent with matching ID
+                const torrent = data.results.find(t => t.id === torrentId);
+
+                if (!torrent) {
+                    showError('种子不存在');
+                    return;
+                }
+
+                torrentData = torrent;
+                displayTorrentDetails(torrent);
+            } catch (error) {
+                showError('加载失败: ' + error.message);
+            }
+        }
+
+        // Display torrent details
+        function displayTorrentDetails(torrent) {
+            const contentDiv = document.getElementById('content');
+            const magnetSection = document.getElementById('magnetSection');
+
+            const hasFiles = torrent.fileList && torrent.fileList.length > 0;
+            const hasHighlightFiles = torrent.highlightedFileList && torrent.highlightedFileList.length > 0;
+            const files = hasHighlightFiles ? torrent.highlightedFileList : torrent.fileList;
+
+            let html = `
+                <div class="torrent-info">
+                    <div class="torrent-name">${torrent.highlightedName || escapeHtml(torrent.name)}</div>
+                    <div class="torrent-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">大小</span>
+                            <span class="meta-value">${torrent.sizeFormatted}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">做种数</span>
+                            <span class="meta-value seeders">${torrent.seeders || 0}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">下载数</span>
+                            <span class="meta-value leechers">${torrent.leechers || 0}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">文件数</span>
+                            <span class="meta-value">${torrent.files || 0}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">创建时间</span>
+                            <span class="meta-value">${torrent.createTimeFormatted || '未知'}</span>
+                        </div>
+                        ${torrent.detectedLanguages && torrent.detectedLanguages.length > 0 ? `
+                        <div class="meta-item">
+                            <span class="meta-label">语言</span>
+                            <span class="meta-value">${torrent.detectedLanguages.join(', ')}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            if (hasFiles && files.length > 0) {
+                html += `
+                    <div class="file-list-section">
+                        <div class="file-list-title">文件列表 (${files.length} 个文件)</div>
+                        <div class="file-list" id="fileList">
+                            ${renderFiles(files, 0, FILE_PAGE_SIZE)}
+                        </div>
+                        ${files.length > FILE_PAGE_SIZE ? `
+                            <button id="loadMoreBtn" onclick="loadMoreFiles()" style="width:100%;margin-top:15px;padding:10px;background:#667eea;color:white;border:none;border-radius:5px;cursor:pointer;">加载更多</button>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="file-list-section">
+                        <div class="no-files">无文件列表信息</div>
+                    </div>
+                `;
+            }
+
+            contentDiv.innerHTML = html;
+            magnetSection.style.display = 'block';
+
+            // Store file data
+            if (hasFiles) {
+                window.torrentFiles = files;
+                displayedFiles = Math.min(FILE_PAGE_SIZE, files.length);
+            }
+        }
+
+        // Render files
+        function renderFiles(files, start, end) {
+            return files.slice(start, end).map(file => `
+                <div class="file-item">
+                    <div class="file-name">${file.path}</div>
+                    ${file.size ? `<div class="file-size">${formatFileSize(file.size)}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Load more files
+        function loadMoreFiles() {
+            if (!window.torrentFiles || displayedFiles >= window.torrentFiles.length) return;
+
+            const fileList = document.getElementById('fileList');
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+
+            const newFiles = renderFiles(window.torrentFiles, displayedFiles, displayedFiles + FILE_PAGE_SIZE);
+            fileList.insertAdjacentHTML('beforeend', newFiles);
+
+            displayedFiles = Math.min(displayedFiles + FILE_PAGE_SIZE, window.torrentFiles.length);
+
+            if (displayedFiles >= window.torrentFiles.length) {
+                loadMoreBtn.textContent = '已显示全部文件';
+                loadMoreBtn.disabled = true;
+            }
+        }
+
+        // Copy magnet link
+        function copyMagnet() {
+            if (!torrentData) return;
+
+            const magnetUri = torrentData.magnetUri;
+            const btn = document.getElementById('magnetBtn');
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(magnetUri).then(() => {
+                    btn.textContent = '✓ 已复制';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.textContent = '🧲 复制磁力链接';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }).catch(err => {
+                    fallbackCopy(magnetUri);
+                });
+            } else {
+                fallbackCopy(magnetUri);
+            }
+        }
+
+        // Fallback copy
+        function fallbackCopy(magnetUri) {
+            const textarea = document.createElement('textarea');
+            textarea.value = magnetUri;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                const btn = document.getElementById('magnetBtn');
+                btn.textContent = '✓ 已复制';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '🧲 复制磁力链接';
+                    btn.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('content').innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Load on page load
+        loadTorrentDetails();
+    </script>
+</body>
+</html>

@@ -46,9 +46,16 @@
             gap: 10px;
             margin-bottom: 20px;
         }
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
         .search-input {
             flex: 1;
             padding: 15px 20px;
+            padding-right: 50px;
             font-size: 16px;
             border: 2px solid #e0e0e0;
             border-radius: 5px;
@@ -57,6 +64,27 @@
         }
         .search-input:focus {
             border-color: #667eea;
+        }
+        .clear-btn {
+            position: absolute;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: #999;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            transition: color 0.3s;
+        }
+        .clear-btn:hover {
+            color: #666;
+        }
+        .clear-btn.visible {
+            display: flex;
         }
         .search-btn {
             padding: 15px 40px;
@@ -303,6 +331,83 @@
             border-radius: 3px;
             font-weight: bold;
         }
+
+        /* Mobile specific styles */
+        .back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        .back-to-top.visible {
+            display: flex;
+        }
+        .back-to-top:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        .loading-more {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            display: none;
+        }
+        .loading-more.visible {
+            display: block;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .search-box {
+                padding: 20px;
+            }
+            .search-form {
+                flex-direction: column;
+            }
+            .search-btn {
+                width: 100%;
+            }
+            .filters {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .filter {
+                justify-content: space-between;
+            }
+            .filter select {
+                flex: 1;
+            }
+            .torrent-meta {
+                font-size: 12px;
+                gap: 10px;
+            }
+            .back-to-top {
+                bottom: 20px;
+                right: 20px;
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -314,7 +419,10 @@
 
         <div class="search-box">
             <form class="search-form" id="searchForm">
-                <input type="text" class="search-input" id="keyword" placeholder="输入搜索关键词..." required>
+                <div class="search-input-wrapper">
+                    <input type="text" class="search-input" id="keyword" placeholder="输入搜索关键词..." required>
+                    <button type="button" class="clear-btn" id="clearBtn" onclick="clearSearch()">×</button>
+                </div>
                 <button type="submit" class="search-btn">搜索</button>
             </form>
             <div class="filters">
@@ -333,32 +441,48 @@
                         <option value="asc">升序</option>
                     </select>
                 </div>
-                <div class="filter">
-                    <label>每页:</label>
-                    <select id="pageSize">
-                        <option value="10">10</option>
-                        <option value="20" selected>20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                </div>
             </div>
         </div>
 
         <div class="results" id="results">
             <div id="resultsContent"></div>
+            <div class="loading-more" id="loadingMore">加载中...</div>
         </div>
     </div>
 
+    <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+
     <script th:inline="none">
+        // Token verification - check on every page access
+        (function() {
+            const VALID_TOKEN = 'shijin';
+            const storedToken = localStorage.getItem('access_token');
+            const currentPath = window.location.pathname;
+
+            // Skip token check if already on token page
+            if (currentPath === '/token') return;
+
+            // If token is invalid or missing, redirect to token page
+            if (storedToken !== VALID_TOKEN) {
+                const currentUrl = encodeURIComponent(window.location.href);
+                window.location.href = '/token?redirect=' + currentUrl;
+                return; // Stop execution
+            }
+        })();
+
+        // Detect mobile device
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        const PAGE_SIZE = isMobile ? 8 : 20;
+
         let currentPage = 1;
         let currentKeyword = '';
         let currentSort = 'seeders';
         let currentOrder = 'desc';
-        let currentPageSize = 20;
         let expandedFileLists = new Set();
         let fileListData = {};
-        const FILE_PAGE_SIZE = 100;
+        let hasMore = true;
+        let isLoading = false;
+        const FILE_PAGE_SIZE = 50;
 
         // Load stats
         async function loadStats() {
@@ -372,158 +496,44 @@
             }
         }
 
-        // Search function
-        async function search(page = 1) {
-            const keyword = document.getElementById('keyword').value.trim();
-            if (!keyword) return;
+        // Infinite scroll for mobile
+        function setupInfiniteScroll() {
+            if (!isMobile) return;
 
-            currentPage = page;
-            currentKeyword = keyword;
-            currentSort = document.getElementById('sort').value;
-            currentOrder = document.getElementById('order').value;
-            currentPageSize = parseInt(document.getElementById('pageSize').value);
+            window.removeEventListener('scroll', handleScroll);
+            window.addEventListener('scroll', handleScroll);
+        }
 
-            const resultsDiv = document.getElementById('results');
-            const contentDiv = document.getElementById('resultsContent');
+        function handleScroll() {
+            if (isLoading || !hasMore) return;
 
-            resultsDiv.classList.add('active');
-            contentDiv.innerHTML = '<div class="loading">搜索中...</div>';
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
 
-            try {
-                const params = new URLSearchParams({
-                    keyword: keyword,
-                    page: page,
-                    size: currentPageSize,
-                    sort: currentSort,
-                    order: currentOrder
-                });
-
-                const response = await fetch(`/api/v1/search?${params}`);
-                const data = await response.json();
-
-                displayResults(data);
-            } catch (error) {
-                contentDiv.innerHTML = `<div class="error">搜索失败: ${error.message}</div>`;
+            if (scrollTop + windowHeight >= documentHeight - 500) {
+                search(currentPage + 1, true);
             }
         }
 
-        // Display results
-        function displayResults(data) {
-            const contentDiv = document.getElementById('resultsContent');
+        // Back to top button
+        function setupBackToTop() {
+            const backToTop = document.getElementById('backToTop');
 
-            fileListData = {};
-
-            if (data.total === 0) {
-                contentDiv.innerHTML = '<div class="no-results">未找到相关结果</div>';
-                return;
-            }
-
-            let html = `
-                <div class="result-info">
-                    找到 <strong>${data.total.toLocaleString()}</strong> 个结果
-                    (耗时 ${data.took}ms, 第 ${data.page}/${data.totalPages} 页)
-                </div>
-            `;
-
-            data.results.forEach((item, index) => {
-                const uniqueId = `filelist-${index}`;
-                const hasFiles = item.fileList && item.fileList.length > 0;
-                const hasHighlightFiles = item.highlightedFileList && item.highlightedFileList.length > 0;
-
-                if (hasFiles) {
-                    fileListData[uniqueId] = {
-                        files: hasHighlightFiles ? item.highlightedFileList : item.fileList,
-                        currentPage: 1,
-                        pageSize: FILE_PAGE_SIZE
-                    };
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 300) {
+                    backToTop.classList.add('visible');
+                } else {
+                    backToTop.classList.remove('visible');
                 }
-
-                html += `
-                    <div class="torrent-item">
-                        <div class="torrent-name">${item.highlightedName ? item.highlightedName : escapeHtml(item.name)}</div>
-                        <div class="torrent-meta">
-                            <div class="meta-item">
-                                <span class="meta-label">大小:</span>
-                                <span>${item.sizeFormatted}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">做种:</span>
-                                <span class="seeders">${item.seeders || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">下载:</span>
-                                <span class="leechers">${item.leechers || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">文件:</span>
-                                <span>${item.files || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">时间:</span>
-                                <span>${item.createTimeFormatted || '未知'}</span>
-                            </div>
-                            ${item.detectedLanguages && item.detectedLanguages.length > 0 ? `
-                            <div class="meta-item">
-                                <span class="meta-label">语言:</span>
-                                <span>${item.detectedLanguages.join(', ')}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                        ${hasFiles ? `
-                        <div class="file-list-toggle">
-                            <button onclick="toggleFileList('${uniqueId}')">
-                                📁 查看文件列表 (${item.fileList.length} 个文件)
-                            </button>
-                        </div>
-                        <div class="file-list" id="${uniqueId}">
-                            <div class="file-list-title">文件列表:</div>
-                            <div class="file-list-container" id="${uniqueId}-container"></div>
-                            <button class="load-more-btn" id="${uniqueId}-loadmore" onclick="loadMoreFiles('${uniqueId}')"></button>
-                        </div>
-                        ` : '<div class="no-files">无文件列表信息</div>'}
-                        <button class="magnet-link" onclick="copyMagnet('${item.magnetUri}', this)">🧲 复制磁力链接</button>
-                    </div>
-                `;
             });
+        }
 
-            // Pagination
-            if (data.totalPages > 1) {
-                html += '<div class="pagination">';
-
-                if (data.page > 1) {
-                    html += `<button onclick="search(${data.page - 1})">上一页</button>`;
-                }
-
-                const startPage = Math.max(1, data.page - 2);
-                const endPage = Math.min(data.totalPages, data.page + 2);
-
-                if (startPage > 1) {
-                    html += `<button onclick="search(1)">1</button>`;
-                    if (startPage > 2) {
-                        html += `<span>...</span>`;
-                    }
-                }
-
-                for (let i = startPage; i <= endPage; i++) {
-                    const activeClass = i === data.page ? 'active' : '';
-                    html += `<button class="${activeClass}" onclick="search(${i})">${i}</button>`;
-                }
-
-                if (endPage < data.totalPages) {
-                    if (endPage < data.totalPages - 1) {
-                        html += `<span>...</span>`;
-                    }
-                    html += `<button onclick="search(${data.totalPages})">${data.totalPages}</button>`;
-                }
-
-                if (data.page < data.totalPages) {
-                    html += `<button onclick="search(${data.page + 1})">下一页</button>`;
-                }
-
-                html += '</div>';
-            }
-
-            contentDiv.innerHTML = html;
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         }
 
         // Toggle file list
@@ -639,15 +649,292 @@
             document.body.removeChild(textarea);
         }
 
-        // Form submit
+        // Clear search input
+        function clearSearch() {
+            const keywordInput = document.getElementById('keyword');
+            keywordInput.value = '';
+            keywordInput.focus();
+            updateClearButton();
+        }
+
+        // Update clear button visibility
+        function updateClearButton() {
+            const keywordInput = document.getElementById('keyword');
+            const clearBtn = document.getElementById('clearBtn');
+            if (keywordInput.value.trim().length > 0) {
+                clearBtn.classList.add('visible');
+            } else {
+                clearBtn.classList.remove('visible');
+            }
+        }
+
+        // Navigate to detail page (mobile)
+        function viewDetail(torrentId) {
+            const keyword = document.getElementById('keyword').value.trim();
+            const page = currentPage;
+            const sort = document.getElementById('sort').value;
+            const order = document.getElementById('order').value;
+
+            const params = new URLSearchParams({
+                id: torrentId,
+                q: keyword,
+                p: page,
+                s: sort,
+                o: order
+            });
+
+            window.location.href = `/detail?${params.toString()}`;
+        }
+
+        // Navigate to search URL
+        function navigateToSearch(page = 1) {
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) return;
+
+            const sort = document.getElementById('sort').value;
+            const order = document.getElementById('order').value;
+
+            const params = new URLSearchParams({
+                q: keyword,
+                p: page,
+                s: sort,
+                o: order
+            });
+
+            window.location.href = `/?${params.toString()}`;
+        }
+
+        // Parse URL parameters and search
+        function searchFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const keyword = params.get('q');
+            const page = parseInt(params.get('p')) || 1;
+            const sort = params.get('s') || 'seeders';
+            const order = params.get('o') || 'desc';
+
+            if (keyword) {
+                document.getElementById('keyword').value = keyword;
+                document.getElementById('sort').value = sort;
+                document.getElementById('order').value = order;
+                updateClearButton();
+                search(page);
+            }
+        }
+
+        // Search function (AJAX mode for PC pagination, mobile infinite scroll)
+        async function search(page = 1, append = false) {
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) return;
+
+            if (isLoading) return;
+            isLoading = true;
+
+            if (!append) {
+                currentPage = page;
+                currentKeyword = keyword;
+                currentSort = document.getElementById('sort').value;
+                currentOrder = document.getElementById('order').value;
+                hasMore = true;
+            }
+
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('resultsContent');
+
+            resultsDiv.classList.add('active');
+
+            if (!append) {
+                contentDiv.innerHTML = '<div class="loading">搜索中...</div>';
+            } else {
+                document.getElementById('loadingMore').classList.add('visible');
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    keyword: keyword,
+                    page: page,
+                    size: PAGE_SIZE,
+                    sort: currentSort,
+                    order: currentOrder
+                });
+
+                const response = await fetch(`/api/v1/search?${params}`);
+                const data = await response.json();
+
+                if (append) {
+                    displayResults(data, true);
+                } else {
+                    displayResults(data, false);
+                }
+
+                hasMore = data.page < data.totalPages;
+                currentPage = page;
+
+                if (isMobile) {
+                    setupInfiniteScroll();
+                }
+            } catch (error) {
+                if (!append) {
+                    contentDiv.innerHTML = `<div class="error">搜索失败: ${error.message}</div>`;
+                }
+                hasMore = false;
+            } finally {
+                isLoading = false;
+                document.getElementById('loadingMore').classList.remove('visible');
+            }
+        }
+
+        // Display results
+        function displayResults(data, append) {
+            const contentDiv = document.getElementById('resultsContent');
+
+            if (!append) {
+                fileListData = {};
+                if (data.total === 0) {
+                    contentDiv.innerHTML = '<div class="no-results">未找到相关结果</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="result-info">
+                        找到 <strong>${data.total.toLocaleString()}</strong> 个结果
+                        (耗时 ${data.took}ms, 第 ${data.page}/${data.totalPages} 页)
+                    </div>
+                `;
+                contentDiv.innerHTML = html;
+            }
+
+            let html = '';
+            const startIndex = append ? contentDiv.querySelectorAll('.torrent-item').length : 0;
+
+            data.results.forEach((item, index) => {
+                const uniqueId = `filelist-${startIndex + index}`;
+                const hasFiles = item.fileList && item.fileList.length > 0;
+                const hasHighlightFiles = item.highlightedFileList && item.highlightedFileList.length > 0;
+
+                if (hasFiles) {
+                    fileListData[uniqueId] = {
+                        files: hasHighlightFiles ? item.highlightedFileList : item.fileList,
+                        currentPage: 1,
+                        pageSize: FILE_PAGE_SIZE
+                    };
+                }
+
+                html += `
+                    <div class="torrent-item">
+                        <div class="torrent-name">${item.highlightedName ? item.highlightedName : escapeHtml(item.name)}</div>
+                        <div class="torrent-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">大小:</span>
+                                <span>${item.sizeFormatted}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">做种:</span>
+                                <span class="seeders">${item.seeders || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">下载:</span>
+                                <span class="leechers">${item.leechers || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">文件:</span>
+                                <span>${item.files || 0}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">时间:</span>
+                                <span>${item.createTimeFormatted || '未知'}</span>
+                            </div>
+                            ${item.detectedLanguages && item.detectedLanguages.length > 0 ? `
+                            <div class="meta-item">
+                                <span class="meta-label">语言:</span>
+                                <span>${item.detectedLanguages.join(', ')}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ${hasFiles ? `
+                        <div class="file-list-toggle">
+                            <button onclick="${isMobile ? `viewDetail('${item.id}')` : `toggleFileList('${uniqueId}')`}">
+                                📁 查看文件列表 (${item.fileList.length} 个文件)
+                            </button>
+                        </div>
+                        ${!isMobile ? `
+                        <div class="file-list" id="${uniqueId}">
+                            <div class="file-list-title">文件列表:</div>
+                            <div class="file-list-container" id="${uniqueId}-container"></div>
+                            <button class="load-more-btn" id="${uniqueId}-loadmore" onclick="loadMoreFiles('${uniqueId}')"></button>
+                        </div>
+                        ` : ''}
+                        ` : '<div class="no-files">无文件列表信息</div>'}
+                        <button class="magnet-link" onclick="copyMagnet('${item.magnetUri}', this)">🧲 复制磁力链接</button>
+                    </div>
+                `;
+            });
+
+            // Append new results
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            while (tempDiv.firstChild) {
+                contentDiv.appendChild(tempDiv.firstChild);
+            }
+
+            // Pagination for PC (now uses URL navigation)
+            if (!append && data.totalPages > 1) {
+                html = '<div class="pagination">';
+
+                if (data.page > 1) {
+                    html += `<button onclick="navigateToSearch(${data.page - 1})">上一页</button>`;
+                }
+
+                const startPage = Math.max(1, data.page - 2);
+                const endPage = Math.min(data.totalPages, data.page + 2);
+
+                if (startPage > 1) {
+                    html += `<button onclick="navigateToSearch(1)">1</button>`;
+                    if (startPage > 2) {
+                        html += `<span>...</span>`;
+                    }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    const activeClass = i === data.page ? 'active' : '';
+                    html += `<button class="${activeClass}" onclick="navigateToSearch(${i})">${i}</button>`;
+                }
+
+                if (endPage < data.totalPages) {
+                    if (endPage < data.totalPages - 1) {
+                        html += `<span>...</span>`;
+                    }
+                    html += `<button onclick="navigateToSearch(${data.totalPages})">${data.totalPages}</button>`;
+                }
+
+                if (data.page < data.totalPages) {
+                    html += `<button onclick="navigateToSearch(${data.page + 1})">下一页</button>`;
+                }
+
+                html += '</div>';
+                const paginationDiv = document.createElement('div');
+                paginationDiv.innerHTML = html;
+                contentDiv.appendChild(paginationDiv);
+            }
+        }
+
+        // Form submit - now uses URL navigation
         document.getElementById('searchForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            search(1);
+            navigateToSearch(1);
         });
+
+        // Keyword input event - show/hide clear button
+        document.getElementById('keyword').addEventListener('input', updateClearButton);
+
+        // Initialize
+        setupBackToTop();
 
         // Load stats on page load
         loadStats();
         setInterval(loadStats, 30000);
+
+        // Check URL params and search if present
+        searchFromUrl();
     </script>
 </body>
 </html>

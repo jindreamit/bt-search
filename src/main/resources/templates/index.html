@@ -703,14 +703,14 @@
         }
 
         // Navigate to detail page (mobile)
-        function viewDetail(torrentId) {
+        function viewDetail(torrentHash) {
             const keyword = document.getElementById('keyword').value.trim();
             const page = currentPage;
             const sort = document.getElementById('sort').value;
             const order = document.getElementById('order').value;
 
             const params = new URLSearchParams({
-                id: torrentId,
+                hash: torrentHash,
                 q: keyword,
                 p: page,
                 s: sort,
@@ -900,7 +900,7 @@
                         </div>
                         ${hasFiles ? `
                         <div class="file-list-toggle">
-                            <button onclick="${isMobile ? `viewDetail('${item.id}')` : `toggleFileList('${uniqueId}')`}">
+                            <button onclick="${isMobile ? `viewDetail('${item.infoHash}')` : `toggleFileList('${uniqueId}')`}">
                                 📁 查看文件列表 (${item.fileList.length} 个文件)
                             </button>
                         </div>

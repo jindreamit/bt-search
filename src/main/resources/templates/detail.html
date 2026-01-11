@@ -215,10 +215,10 @@
         const FILE_PAGE_SIZE = 100;
         let displayedFiles = 0;
 
-        // Get torrent ID from URL
-        function getTorrentId() {
+        // Get torrent infoHash from URL
+        function getTorrentHash() {
             const params = new URLSearchParams(window.location.search);
-            return params.get('id');
+            return params.get('hash');
         }
 
         // Go back to previous page
@@ -232,39 +232,21 @@
 
         // Load torrent details
         async function loadTorrentDetails() {
-            const torrentId = getTorrentId();
-            if (!torrentId) {
-                showError('缺少种子ID');
+            const torrentHash = getTorrentHash();
+            if (!torrentHash) {
+                showError('缺少种子哈希值');
                 return;
             }
 
             try {
-                // Fetch torrent details from search API with the ID
-                const params = new URLSearchParams(window.location.search);
-                const keyword = params.get('q') || '';
-                const page = params.get('p') || '1';
-                const sort = params.get('s') || 'seeders';
-                const order = params.get('o') || 'desc';
-
-                const searchParams = new URLSearchParams({
-                    keyword: keyword,
-                    page: page,
-                    size: 100,
-                    sort: sort,
-                    order: order
-                });
-
-                const response = await fetch(`/api/v1/search?${searchParams}`);
-                const data = await response.json();
-
-                // Find the torrent with matching ID
-                const torrent = data.results.find(t => t.id === torrentId);
-
-                if (!torrent) {
+                // Fetch torrent details from API
+                const response = await fetch(`/api/v1/torrents/${torrentHash}`);
+                if (!response.ok) {
                     showError('种子不存在');
                     return;
                 }
 
+                const torrent = await response.json();
                 torrentData = torrent;
                 displayTorrentDetails(torrent);
             } catch (error) {
@@ -278,16 +260,14 @@
             const magnetSection = document.getElementById('magnetSection');
 
             const hasFiles = torrent.fileList && torrent.fileList.length > 0;
-            const hasHighlightFiles = torrent.highlightedFileList && torrent.highlightedFileList.length > 0;
-            const files = hasHighlightFiles ? torrent.highlightedFileList : torrent.fileList;
 
             let html = `
                 <div class="torrent-info">
-                    <div class="torrent-name">${torrent.highlightedName || escapeHtml(torrent.name)}</div>
+                    <div class="torrent-name">${escapeHtml(torrent.name)}</div>
                     <div class="torrent-meta">
                         <div class="meta-item">
                             <span class="meta-label">大小</span>
-                            <span class="meta-value">${torrent.sizeFormatted}</span>
+                            <span class="meta-value">${formatFileSize(torrent.size)}</span>
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">做种数</span>
@@ -303,7 +283,7 @@
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">创建时间</span>
-                            <span class="meta-value">${torrent.createTimeFormatted || '未知'}</span>
+                            <span class="meta-value">${torrent.createTime ? formatDate(torrent.createTime) : '未知'}</span>
                         </div>
                         ${torrent.detectedLanguages && torrent.detectedLanguages.length > 0 ? `
                         <div class="meta-item">
@@ -315,14 +295,14 @@
                 </div>
             `;
 
-            if (hasFiles && files.length > 0) {
+            if (hasFiles && torrent.fileList.length > 0) {
                 html += `
                     <div class="file-list-section">
-                        <div class="file-list-title">文件列表 (${files.length} 个文件)</div>
+                        <div class="file-list-title">文件列表 (${torrent.fileList.length} 个文件)</div>
                         <div class="file-list" id="fileList">
-                            ${renderFiles(files, 0, FILE_PAGE_SIZE)}
+                            ${renderFiles(torrent.fileList, 0, FILE_PAGE_SIZE)}
                         </div>
-                        ${files.length > FILE_PAGE_SIZE ? `
+                        ${torrent.fileList.length > FILE_PAGE_SIZE ? `
                             <button id="loadMoreBtn" onclick="loadMoreFiles()" style="width:100%;margin-top:15px;padding:10px;background:#667eea;color:white;border:none;border-radius:5px;cursor:pointer;">加载更多</button>
                         ` : ''}
                     </div>
@@ -340,9 +320,18 @@
 
             // Store file data
             if (hasFiles) {
-                window.torrentFiles = files;
-                displayedFiles = Math.min(FILE_PAGE_SIZE, files.length);
+                window.torrentFiles = torrent.fileList;
+                displayedFiles = Math.min(FILE_PAGE_SIZE, torrent.fileList.length);
             }
+        }
+
+        // Format date from timestamp
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         // Render files

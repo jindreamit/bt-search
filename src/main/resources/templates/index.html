@@ -373,29 +373,48 @@
         /* Mobile responsive */
         @media (max-width: 768px) {
             body {
+                padding: 0;
+                background: #f5f5f5;
+            }
+            .container {
                 padding: 10px;
             }
+            .header {
+                margin-bottom: 15px;
+                padding: 15px 10px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                margin: -10px -10px 15px -10px;
+            }
             .header h1 {
-                font-size: 1.8em;
+                font-size: 1.5em;
+                margin-bottom: 5px;
+            }
+            .stats {
+                font-size: 0.8em;
             }
             .search-box {
-                padding: 20px;
+                padding: 15px;
+                margin-bottom: 10px;
             }
             .search-form {
                 flex-direction: column;
+                margin-bottom: 15px;
             }
             .search-btn {
                 width: 100%;
             }
             .filters {
                 flex-direction: column;
-                gap: 10px;
+                gap: 8px;
             }
             .filter {
                 justify-content: space-between;
+                font-size: 13px;
             }
             .filter select {
                 flex: 1;
+                padding: 6px 10px;
+                font-size: 13px;
             }
             .torrent-meta {
                 font-size: 12px;
@@ -409,14 +428,14 @@
                 font-size: 20px;
             }
             .loading-more {
-                padding: 40px 20px;
+                padding: 30px 15px;
                 text-align: center;
             }
             .no-more {
-                padding: 40px 20px;
+                padding: 30px 15px;
                 text-align: center;
                 color: #999;
-                font-size: 14px;
+                font-size: 13px;
             }
         }
     </style>

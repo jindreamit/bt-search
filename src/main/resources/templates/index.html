@@ -236,13 +236,17 @@
             padding: 8px 15px;
             background: #667eea;
             color: white;
-            text-decoration: none;
+            border: none;
             border-radius: 5px;
             font-size: 14px;
-            transition: background 0.3s;
+            cursor: pointer;
+            transition: all 0.3s;
         }
         .magnet-link:hover {
             background: #764ba2;
+        }
+        .magnet-link.copied {
+            background: #4caf50;
         }
         .pagination {
             display: flex;
@@ -477,7 +481,7 @@
                             <button class="load-more-btn" id="${uniqueId}-loadmore" onclick="loadMoreFiles('${uniqueId}')"></button>
                         </div>
                         ` : '<div class="no-files">无文件列表信息</div>'}
-                        <a href="${item.magnetUri}" class="magnet-link">🧲 磁力链接</a>
+                        <button class="magnet-link" onclick="copyMagnet('${item.magnetUri}', this)">🧲 复制磁力链接</button>
                     </div>
                 `;
             });
@@ -589,6 +593,50 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Copy magnet link to clipboard
+        function copyMagnet(magnetUri, button) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(magnetUri).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = '✓ 已复制';
+                    button.classList.add('copied');
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.classList.remove('copied');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    fallbackCopy(magnetUri, button);
+                });
+            } else {
+                fallbackCopy(magnetUri, button);
+            }
+        }
+
+        // Fallback copy method for older browsers
+        function fallbackCopy(magnetUri, button) {
+            const textarea = document.createElement('textarea');
+            textarea.value = magnetUri;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                const originalText = button.textContent;
+                button.textContent = '✓ 已复制';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                button.textContent = '✗ 复制失败';
+            }
+            document.body.removeChild(textarea);
         }
 
         // Form submit

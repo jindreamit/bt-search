@@ -153,32 +153,16 @@ public class SearchService {
 
                     // 处理高亮
                     String highlightedName = doc.getName();
-                    List<SearchResult.FileItem> highlightedFileItems = null;
-
                     if (hit.getHighlightFields() != null && !hit.getHighlightFields().isEmpty()) {
                         // 获取name高亮
                         List<String> nameHighlights = hit.getHighlightFields().get("name");
                         if (nameHighlights != null && !nameHighlights.isEmpty()) {
                             highlightedName = String.join("...", nameHighlights);
                         }
-
-                        // 获取fileList.path高亮
-                        List<String> pathHighlights = hit.getHighlightFields().get("fileList.path");
-                        if (pathHighlights != null && !pathHighlights.isEmpty()) {
-                            highlightedFileItems = pathHighlights.stream()
-                                    .map(h -> new SearchResult.FileItem(h, null))
-                                    .toList();
-                        }
                     }
 
-                    // 转换文件列表
-                    List<SearchResult.FileItem> fileItems = null;
-                    if (doc.getFileList() != null && !doc.getFileList().isEmpty()) {
-                        fileItems = doc.getFileList().stream()
-                                .map(f -> new SearchResult.FileItem(f.getPath(), f.getSize()))
-                                .toList();
-                    }
-
+                    // 不返回fileList（可能包含数万个文件），只在详情接口返回
+                    // 只返回文件数量
                     return SearchResult.TorrentItem.builder()
                             .infoHash(doc.getInfoHash())
                             .name(doc.getName())
@@ -192,9 +176,9 @@ public class SearchService {
                             .createTimeFormatted(formatTime(doc.getCreateTime()))
                             .detectedLanguages(doc.getDetectedLanguages())
                             .magnetUri(doc.getMagnetUri())
-                            .fileList(fileItems)
+                            .fileList(null)  // 不返回fileList
                             .highlightedName(highlightedName)
-                            .highlightedFileList(highlightedFileItems)
+                            .highlightedFileList(null)  // 不返回高亮fileList
                             .build();
                 })
                 .collect(Collectors.toList());

@@ -771,9 +771,15 @@
                 const resultsDiv = document.getElementById('results');
                 const resultInfo = document.querySelector('.result-info');
                 if (resultsDiv && resultInfo) {
-                    sessionStorage.setItem('savedKeyword', keyword);  // Save current keyword
+                    const totalText = resultInfo.textContent.match(/找到\s*(\d+)\s*个结果/);
+                    const total = totalText ? totalText[1] : '0';
+
+                    // Save all necessary state for restoring infinite scroll
+                    sessionStorage.setItem('savedKeyword', keyword);
                     sessionStorage.setItem('searchResults', resultsDiv.innerHTML);
                     sessionStorage.setItem('scrollPosition', window.pageYOffset);
+                    sessionStorage.setItem('totalResults', total);
+                    sessionStorage.setItem('totalPages', resultInfo.textContent.match(/第\s*(\d+)\s*页/)?.[1]?.split(/\s*\/\s*/)[1] || '1');
                 }
             }
 
@@ -825,16 +831,28 @@
                         resultsDiv.classList.add('active');
                         resultsDiv.innerHTML = savedResults;
 
+                        // Restore pagination state
+                        const total = parseInt(sessionStorage.getItem('totalResults') || '0');
+                        const totalPages = parseInt(sessionStorage.getItem('totalPages') || '1');
+
+                        // Reset infinite scroll state
+                        currentPage = 1;
+                        hasMore = total > 0 && total < totalPages;
+
                         // Clear sessionStorage after restore
                         sessionStorage.removeItem('searchResults');
                         sessionStorage.removeItem('resultInfo');
                         sessionStorage.removeItem('scrollPosition');
                         sessionStorage.removeItem('savedKeyword');
+                        sessionStorage.removeItem('totalResults');
+                        sessionStorage.removeItem('totalPages');
 
                         // Restore scroll position if available
                         if (savedScrollPosition) {
                             setTimeout(() => {
                                 window.scrollTo(0, parseInt(savedScrollPosition));
+                                // Re-attach infinite scroll handler after restore
+                                setupInfiniteScroll();
                             }, 100);
                         }
 

@@ -1,6 +1,7 @@
 package com.btsearch.model.document;
 
 import com.btsearch.model.dto.TorrentMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.DateFormat;
 import org.springframework.data.elasticsearch.annotations.Document;
@@ -16,6 +17,7 @@ import java.util.List;
  */
 @Document(indexName = "torrents")
 @Setting(settingPath = "elasticsearch/mapping.json", refreshInterval = "30s")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TorrentDocument {
 
     /**

@@ -623,6 +623,55 @@
             renderFilePage(id, nextPage);
         }
 
+        // Load file list asynchronously (for PC)
+        async function loadFileList(infoHash, uniqueId) {
+            const fileListDiv = document.getElementById(uniqueId);
+            const container = document.getElementById(uniqueId + '-container');
+            const button = fileListDiv.previousElementSibling.querySelector('button');
+
+            // Show loading state
+            if (fileListData[uniqueId]) {
+                // Already loaded, just toggle
+                toggleFileList(uniqueId);
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = '加载中...';
+            container.innerHTML = '<div class="file-item">加载中...</div>';
+
+            try {
+                const response = await fetch(`/api/v1/torrents/${infoHash}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load file list');
+                }
+
+                const data = await response.json();
+
+                if (data.fileList && data.fileList.length > 0) {
+                    fileListData[uniqueId] = {
+                        files: data.fileList,
+                        currentPage: 1,
+                        pageSize: FILE_PAGE_SIZE
+                    };
+
+                    // Show the file list
+                    fileListDiv.classList.add('active');
+                    renderFilePage(uniqueId, 1);
+                    button.textContent = '📁 收起文件列表';
+                } else {
+                    container.innerHTML = '<div class="file-item">无文件列表</div>';
+                    button.textContent = '📁 查看文件列表';
+                }
+            } catch (error) {
+                console.error('Failed to load file list:', error);
+                container.innerHTML = '<div class="file-item">加载失败，请重试</div>';
+                button.textContent = '📁 查看文件列表';
+            } finally {
+                button.disabled = false;
+            }
+        }
+
         // Format file size
         function formatFileSize(bytes) {
             if (!bytes || bytes === 0) return '0 B';
@@ -717,6 +766,17 @@
                 o: order
             });
 
+            // Save search results to sessionStorage for mobile back navigation
+            if (isMobile) {
+                const resultsDiv = document.getElementById('results');
+                const resultInfo = document.querySelector('.result-info');
+                if (resultsDiv && resultInfo) {
+                    sessionStorage.setItem('savedKeyword', keyword);  // Save current keyword
+                    sessionStorage.setItem('searchResults', resultsDiv.innerHTML);
+                    sessionStorage.setItem('scrollPosition', window.pageYOffset);
+                }
+            }
+
             window.location.href = `/detail?${params.toString()}`;
         }
 
@@ -751,6 +811,37 @@
                 document.getElementById('sort').value = sort;
                 document.getElementById('order').value = order;
                 updateClearButton();
+
+                // Try to restore from sessionStorage for mobile back navigation
+                // Only restore if the keyword matches (user is returning from detail page)
+                if (isMobile && page === 1) {
+                    const savedKeyword = sessionStorage.getItem('savedKeyword');
+                    const savedResults = sessionStorage.getItem('searchResults');
+                    const savedScrollPosition = sessionStorage.getItem('scrollPosition');
+
+                    if (savedResults && savedKeyword === keyword) {
+                        // Restore saved results without re-fetching
+                        const resultsDiv = document.getElementById('results');
+                        resultsDiv.classList.add('active');
+                        resultsDiv.innerHTML = savedResults;
+
+                        // Clear sessionStorage after restore
+                        sessionStorage.removeItem('searchResults');
+                        sessionStorage.removeItem('resultInfo');
+                        sessionStorage.removeItem('scrollPosition');
+                        sessionStorage.removeItem('savedKeyword');
+
+                        // Restore scroll position if available
+                        if (savedScrollPosition) {
+                            setTimeout(() => {
+                                window.scrollTo(0, parseInt(savedScrollPosition));
+                            }, 100);
+                        }
+
+                        return;
+                    }
+                }
+
                 search(page);
             }
         }
@@ -769,6 +860,9 @@
                 currentSort = document.getElementById('sort').value;
                 currentOrder = document.getElementById('order').value;
                 hasMore = true;
+
+                // Scroll to top when searching new results (not loading more)
+                window.scrollTo(0, 0);
             }
 
             const resultsDiv = document.getElementById('results');
@@ -855,66 +949,45 @@
             const startIndex = append ? contentDiv.querySelectorAll('.torrent-item').length : 0;
 
             data.results.forEach((item, index) => {
-                const uniqueId = `filelist-${startIndex + index}`;
-                const hasFiles = item.fileList && item.fileList.length > 0;
-                const hasHighlightFiles = item.highlightedFileList && item.highlightedFileList.length > 0;
+                const uniqueId = 'filelist-' + (startIndex + index);
+                const hasFiles = item.files > 0;
+
+                let itemHtml = '<div class="torrent-item">';
+                itemHtml += '<div class="torrent-name">' + (item.highlightedName ? item.highlightedName : escapeHtml(item.name)) + '</div>';
+                itemHtml += '<div class="torrent-meta">';
+                itemHtml += '<div class="meta-item"><span class="meta-label">大小:</span><span>' + item.sizeFormatted + '</span></div>';
+                itemHtml += '<div class="meta-item"><span class="meta-label">做种:</span><span class="seeders">' + (item.seeders || 0) + '</span></div>';
+                itemHtml += '<div class="meta-item"><span class="meta-label">下载:</span><span class="leechers">' + (item.leechers || 0) + '</span></div>';
+                itemHtml += '<div class="meta-item"><span class="meta-label">文件:</span><span>' + (item.files || 0) + '</span></div>';
+                itemHtml += '<div class="meta-item"><span class="meta-label">时间:</span><span>' + (item.createTimeFormatted || '未知') + '</span></div>';
+
+                if (item.detectedLanguages && item.detectedLanguages.length > 0) {
+                    itemHtml += '<div class="meta-item"><span class="meta-label">语言:</span><span>' + item.detectedLanguages.join(', ') + '</span></div>';
+                }
+                itemHtml += '</div>';
 
                 if (hasFiles) {
-                    fileListData[uniqueId] = {
-                        files: hasHighlightFiles ? item.highlightedFileList : item.fileList,
-                        currentPage: 1,
-                        pageSize: FILE_PAGE_SIZE
-                    };
+                    const onClickAttr = isMobile
+                        ? "viewDetail('" + item.infoHash + "')"
+                        : "loadFileList('" + item.infoHash + "', '" + uniqueId + "')";
+                    itemHtml += '<div class="file-list-toggle">';
+                    itemHtml += '<button onclick="' + onClickAttr + '">';
+                    itemHtml += '📁 查看文件列表 (' + item.files + ' 个文件)';
+                    itemHtml += '</button></div>';
+
+                    if (!isMobile) {
+                        itemHtml += '<div class="file-list" id="' + uniqueId + '">';
+                        itemHtml += '<div class="file-list-title">文件列表:</div>';
+                        itemHtml += '<div class="file-list-container" id="' + uniqueId + '-container"></div>';
+                        itemHtml += '<button class="load-more-btn" id="' + uniqueId + '-loadmore" onclick="loadMoreFiles(\'' + uniqueId + '\')"></button>';
+                        itemHtml += '</div>';
+                    }
                 }
 
-                html += `
-                    <div class="torrent-item">
-                        <div class="torrent-name">${item.highlightedName ? item.highlightedName : escapeHtml(item.name)}</div>
-                        <div class="torrent-meta">
-                            <div class="meta-item">
-                                <span class="meta-label">大小:</span>
-                                <span>${item.sizeFormatted}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">做种:</span>
-                                <span class="seeders">${item.seeders || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">下载:</span>
-                                <span class="leechers">${item.leechers || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">文件:</span>
-                                <span>${item.files || 0}</span>
-                            </div>
-                            <div class="meta-item">
-                                <span class="meta-label">时间:</span>
-                                <span>${item.createTimeFormatted || '未知'}</span>
-                            </div>
-                            ${item.detectedLanguages && item.detectedLanguages.length > 0 ? `
-                            <div class="meta-item">
-                                <span class="meta-label">语言:</span>
-                                <span>${item.detectedLanguages.join(', ')}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                        ${hasFiles ? `
-                        <div class="file-list-toggle">
-                            <button onclick="${isMobile ? `viewDetail('${item.infoHash}')` : `toggleFileList('${uniqueId}')`}">
-                                📁 查看文件列表 (${item.fileList.length} 个文件)
-                            </button>
-                        </div>
-                        ${!isMobile ? `
-                        <div class="file-list" id="${uniqueId}">
-                            <div class="file-list-title">文件列表:</div>
-                            <div class="file-list-container" id="${uniqueId}-container"></div>
-                            <button class="load-more-btn" id="${uniqueId}-loadmore" onclick="loadMoreFiles('${uniqueId}')"></button>
-                        </div>
-                        ` : ''}
-                        ` : '<div class="no-files">无文件列表信息</div>'}
-                        <button class="magnet-link" onclick="copyMagnet('${item.magnetUri}', this)">🧲 复制磁力链接</button>
-                    </div>
-                `;
+                itemHtml += '<button class="magnet-link" onclick="copyMagnet(\'' + item.magnetUri + '\', this)">🧲 复制磁力链接</button>';
+                itemHtml += '</div>';
+
+                html += itemHtml;
             });
 
             // Append new results

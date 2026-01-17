@@ -37,6 +37,9 @@ public class EsSyncService {
     private static final int QUERY_SIZE = 1000;
     private static final int SLEEP_INTERVAL_MS = 1000;
 
+    /**
+     * 手动触发同步
+     */
     public void sync() {
         log.info("Starting ES sync process");
 

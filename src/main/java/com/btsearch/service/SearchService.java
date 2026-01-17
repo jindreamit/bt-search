@@ -92,13 +92,29 @@ public class SearchService {
      * 构建多语言搜索查询
      */
     private NativeQuery buildSearchQuery(SearchRequest request, Set<LanguageDetectionService.Language> queryLanguages) {
-        // 使用multi_match查询，支持name和fileList.path字段搜索
+        // 使用bool查询组合多个查询条件
+        // 1. 在name字段中搜索
+        // 2. 在nested的fileList.path字段中搜索
         return NativeQuery.builder()
                 .withQuery(q -> q
-                        .multiMatch(m -> m
-                                .fields("name", "fileList.path^2")  // 搜索name和path，path权重更高
-                                .query(request.getKeyword())
-                                .type(co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType.BestFields)
+                        .bool(b -> b
+                                .should(s -> s
+                                        .match(m -> m
+                                                .field("name")
+                                                .query(request.getKeyword())
+                                        )
+                                )
+                                .should(s -> s
+                                        .nested(n -> n
+                                                .path("fileList")
+                                                .query(nq -> nq
+                                                        .match(m -> m
+                                                                .field("fileList.path")
+                                                                .query(request.getKeyword())
+                                                        )
+                                                )
+                                        )
+                                )
                         )
                 )
                 .withTrackTotalHits(true)

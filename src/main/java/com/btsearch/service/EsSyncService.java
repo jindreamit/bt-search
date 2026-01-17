@@ -1,20 +1,16 @@
 package com.btsearch.service;
 
-import co.elastic.clients.elasticsearch.core.BulkResponse;
 import com.btsearch.model.document.TorrentDocument;
 import com.btsearch.model.document.TorrentDocument.FileInfo;
 import com.btsearch.model.dto.TorrentMetadata;
-import com.btsearch.model.entity.SyncRecord;
 import com.btsearch.parser.BencodeParser;
-import com.btsearch.repository.SyncRecordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +22,7 @@ public class EsSyncService {
     private static final Logger log = LoggerFactory.getLogger(EsSyncService.class);
 
     @Autowired
-    private JdbcTemplateService jdbcTemplateService;
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private ElasticsearchTemplate elasticsearchTemplate;
@@ -37,9 +33,6 @@ public class EsSyncService {
     @Autowired
     private LanguageDetectionService languageDetectionService;
 
-    @Autowired
-    private SyncRecordRepository syncRecordRepository;
-
     private static final int BATCH_SIZE = 500;
     private static final int QUERY_SIZE = 1000;
     private static final int SLEEP_INTERVAL_MS = 1000;
@@ -48,15 +41,17 @@ public class EsSyncService {
         log.info("Starting ES sync process");
 
         try {
-            SyncRecord record = syncRecordRepository.getSyncRecord();
-            if (record == null) {
-                log.error("Sync record not found, creating with max_synced_id=0");
-                record = new SyncRecord(0L, null);
-                syncRecordRepository.save(record);
-                record = syncRecordRepository.getSyncRecord();
+            // 使用 JdbcTemplate 直接查询，避免 JPA 连接泄漏
+            Long maxSyncedId = jdbcTemplate.queryForObject(
+                "SELECT max_synced_id FROM torrent_sync_record LIMIT 1",
+                Long.class
+            );
+
+            if (maxSyncedId == null) {
+                log.info("No sync record found, starting from id=0");
+                maxSyncedId = 0L;
             }
 
-            long maxSyncedId = record.getMaxSyncedId();
             long lastId = getLastId();
 
             if (maxSyncedId >= lastId) {
@@ -72,7 +67,7 @@ public class EsSyncService {
 
             while (currentId < lastId) {
                 try {
-                    List<Map<String, Object>> rows = jdbcTemplateService.queryForList(
+                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                         "SELECT id, infohash, infohashDictionary, seeders, leechers, peers, find_time, lang " +
                         "FROM info_dict WHERE id > ? ORDER BY id LIMIT ?",
                         currentId, QUERY_SIZE
@@ -139,13 +134,27 @@ public class EsSyncService {
         }
     }
 
-    @Transactional
+    /**
+     * 更新同步记录 - 使用 JdbcTemplate 直接执行，避免 JPA 事务连接泄漏
+     */
     public void updateSyncRecord(long maxId) {
-        syncRecordRepository.updateSyncRecord(maxId);
+        try {
+            // 使用 INSERT ... ON DUPLICATE KEY UPDATE 语法
+            // 这样可以同时处理插入和更新，且不需要 JPA 事务
+            int updated = jdbcTemplate.update(
+                "INSERT INTO torrent_sync_record (max_synced_id, last_sync_time) " +
+                "VALUES (?, NOW()) " +
+                "ON DUPLICATE KEY UPDATE max_synced_id = VALUES(max_synced_id), last_sync_time = VALUES(last_sync_time)",
+                maxId
+            );
+            log.debug("Updated sync record: maxId={}, affected={}", maxId, updated);
+        } catch (Exception e) {
+            log.error("Failed to update sync record for maxId={}", maxId, e);
+        }
     }
 
     private long getLastId() {
-        Long result = jdbcTemplateService.queryForObject(
+        Long result = jdbcTemplate.queryForObject(
             "SELECT MAX(id) FROM info_dict", Long.class
         );
         return result != null ? result : 0L;

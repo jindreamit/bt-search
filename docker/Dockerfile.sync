@@ -1,29 +1,42 @@
-FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
+# 多阶段构建：构建阶段
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
-WORKDIR /build
+WORKDIR /app
 
-# Copy Maven files
+# 创建Maven配置目录并配置阿里云镜像
+RUN mkdir -p /root/.m2 && \
+    echo '<settings><mirrors><mirror><id>aliyun</id><mirrorOf>*</mirrorOf><name>Aliyun Maven</name><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > /root/.m2/settings.xml
+
+# 复制pom.xml并下载依赖（利用Docker缓存和阿里云镜像）
 COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# 复制源代码
 COPY src ./src
 
-# Build with Aliyun mirror
-RUN mvn clean package -DskipTests --no-transfer-progress
+# 构建应用（跳过测试以加快构建速度）
+RUN mvn clean package -DskipTests -B -s /root/.m2/settings.xml
 
+# 运行阶段
 FROM eclipse-temurin:17-jre-alpine
 
+# 创建非root用户
 RUN addgroup -S spring && adduser -S spring -G spring
 
 WORKDIR /app
 
-# Create logs directory
-RUN mkdir -p /app/logs && chown -R spring:spring /app/logs
+# 创建日志目录（在切换用户之前）
+RUN mkdir -p /app/logs && chown -R spring:spring /app
 
-COPY --from=builder /build/target/bt-search.jar app.jar
+# 从构建阶段复制jar包
+COPY --from=builder /app/target/bt-search.jar app.jar
 
+# 切换到非root用户
+USER spring:spring
+
+# JVM参数优化
 ENV JAVA_OPTS="-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
 ENV LOGGING_CONFIG="classpath:logback-sync.xml"
 
-USER spring:spring
-
-# Run sync application (specify SyncApplication as main class)
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -Dlogging.config=$LOGGING_CONFIG -Dspring.profiles.active=sync -Dloader.main=com.btsearch.SyncApplication -jar app.jar"]
+# 运行同步应用（指定sync profile）
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -Dlogging.config=$LOGGING_CONFIG -Dspring.profiles.active=sync -jar app.jar"]

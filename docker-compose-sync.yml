@@ -19,6 +19,6 @@ services:
       - LOGGING_CONFIG=classpath:logback-sync.xml
       - JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
     volumes:
-      - /mnt/nvme/app/bt-search/logs:/app/logs
+      - /mnt/nvme/app/bt-search/sync-logs:/app/logs
     restart: "no"
     # Single run - exits after sync completes

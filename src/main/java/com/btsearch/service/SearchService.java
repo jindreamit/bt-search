@@ -45,8 +45,16 @@ public class SearchService {
                     .highlight(h -> h
                             .preTags("<em>")
                             .postTags("</em>")
-                            .fields("name", f -> f)
-                            .fields("fileList.path", f -> f)
+                            .fragmentSize(100)
+                            .numberOfFragments(3)
+                            .fields("name", f -> f
+                                    .fragmentSize(150)
+                                    .numberOfFragments(1)
+                            )
+                            .fields("fileList.path", f -> f
+                                    .fragmentSize(80)
+                                    .numberOfFragments(2)
+                            )
                     )
                     .sort(srt -> {
                         // Determine sort field and order based on request

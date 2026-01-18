@@ -496,15 +496,15 @@
     <script th:inline="none">
         // Token verification - check on every page access
         (function() {
-            const VALID_TOKEN = 'shijin';
             const storedToken = localStorage.getItem('access_token');
             const currentPath = window.location.pathname;
 
             // Skip token check if already on token page
             if (currentPath === '/token') return;
 
-            // If token is invalid or missing, redirect to token page
-            if (storedToken !== VALID_TOKEN) {
+            // If token is missing, redirect to token page
+            // (Actual validation happens on backend API calls)
+            if (!storedToken) {
                 const currentUrl = encodeURIComponent(window.location.href);
                 window.location.href = '/token?redirect=' + currentUrl;
                 return; // Stop execution
@@ -525,10 +525,20 @@
         let isLoading = false;
         const FILE_PAGE_SIZE = 50;
 
+        // Helper function to fetch with token
+        async function fetchWithToken(url, options = {}) {
+            const token = localStorage.getItem('access_token');
+            const headers = {
+                ...options.headers,
+                'X-Access-Token': token
+            };
+            return fetch(url, { ...options, headers });
+        }
+
         // Load stats
         async function loadStats() {
             try {
-                const response = await fetch('/api/v1/stats');
+                const response = await fetchWithToken('/api/v1/stats');
                 const data = await response.json();
                 document.getElementById('stats').textContent =
                     `已索引 ${data.totalTorrents.toLocaleString()} 个种子`;
@@ -587,7 +597,11 @@
                 element.classList.remove('active');
             } else {
                 element.classList.add('active');
-                renderFilePage(id, 1);
+                // Re-render with current page to maintain state
+                const data = fileListData[id];
+                if (data) {
+                    renderFilePage(id, data.currentPage || 1);
+                }
             }
         }
 
@@ -599,16 +613,40 @@
             const container = document.getElementById(id + '-container');
             const loadMoreBtn = document.getElementById(id + '-loadmore');
 
-            const startIndex = 0;
+            const startIndex = (page - 1) * data.pageSize;
             const endIndex = page * data.pageSize;
             const filesToShow = data.files.slice(startIndex, endIndex);
 
-            container.innerHTML = filesToShow.map(file => `
+            // Build HTML for this page
+            const newFilesHtml = filesToShow.map(file => `
                 <div class="file-item">
                     <div class="file-name">${file.path}</div>
                     ${file.size ? `<div class="file-size">${formatFileSize(file.size)}</div>` : ''}
                 </div>
             `).join('');
+
+            // Check if we're loading the next page (append) or reloading current page (replace)
+            if (page === 1) {
+                container.innerHTML = newFilesHtml;
+            } else if (page === data.currentPage + 1) {
+                // Loading next page - append
+                container.innerHTML += newFilesHtml;
+            } else {
+                // Reloading a page - rebuild all pages up to this one
+                let allHtml = '';
+                for (let i = 1; i <= page; i++) {
+                    const pageStart = (i - 1) * data.pageSize;
+                    const pageEnd = i * data.pageSize;
+                    const pageFiles = data.files.slice(pageStart, pageEnd);
+                    allHtml += pageFiles.map(file => `
+                        <div class="file-item">
+                            <div class="file-name">${file.path}</div>
+                            ${file.size ? `<div class="file-size">${formatFileSize(file.size)}</div>` : ''}
+                        </div>
+                    `).join('');
+                }
+                container.innerHTML = allHtml;
+            }
 
             const remaining = data.files.length - endIndex;
             if (remaining > 0) {
@@ -651,7 +689,7 @@
             container.innerHTML = '<div class="file-item">加载中...</div>';
 
             try {
-                const response = await fetch(`/api/v1/torrents/${infoHash}`);
+                const response = await fetchWithToken(`/api/v1/torrents/${infoHash}`);
                 if (!response.ok) {
                     throw new Error('Failed to load file list');
                 }
@@ -889,6 +927,14 @@
                 currentOrder = document.getElementById('order').value;
                 hasMore = true;
 
+                // Clear any saved scroll state when starting a new search
+                sessionStorage.removeItem('searchResults');
+                sessionStorage.removeItem('resultInfo');
+                sessionStorage.removeItem('scrollPosition');
+                sessionStorage.removeItem('savedKeyword');
+                sessionStorage.removeItem('totalResults');
+                sessionStorage.removeItem('totalPages');
+
                 // Scroll to top when searching new results (not loading more)
                 window.scrollTo(0, 0);
             }
@@ -913,7 +959,7 @@
                     order: currentOrder
                 });
 
-                const response = await fetch(`/api/v1/search?${params}`);
+                const response = await fetchWithToken(`/api/v1/search?${params}`);
                 const data = await response.json();
 
                 if (append) {
@@ -1088,7 +1134,6 @@
 
         // Load stats on page load
         loadStats();
-        setInterval(loadStats, 30000);
 
         // Check URL params and search if present
         searchFromUrl();

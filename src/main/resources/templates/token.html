@@ -112,21 +112,42 @@
     </div>
 
     <script>
-        document.getElementById('tokenForm').addEventListener('submit', function(e) {
+        document.getElementById('tokenForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const token = document.getElementById('token').value.trim();
             const errorDiv = document.getElementById('error');
+            const submitBtn = this.querySelector('.submit-btn');
 
-            if (token === 'shijin') {
-                localStorage.setItem('access_token', token);
-                // Redirect back to the original page or home
-                const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/';
-                window.location.href = redirectUrl;
-            } else {
-                errorDiv.textContent = 'Token错误，请重试';
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = '验证中...';
+
+            try {
+                // Verify token by calling backend API
+                const response = await fetch('/api/v1/auth/verify', {
+                    headers: {
+                        'X-Access-Token': token
+                    }
+                });
+
+                if (response.ok) {
+                    // Token is valid, save it and redirect
+                    localStorage.setItem('access_token', token);
+                    const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/';
+                    window.location.href = redirectUrl;
+                } else {
+                    // Token is invalid
+                    errorDiv.textContent = 'Token错误，请重试';
+                    errorDiv.classList.add('show');
+                    document.getElementById('token').value = '';
+                    document.getElementById('token').focus();
+                }
+            } catch (error) {
+                errorDiv.textContent = '网络错误，请重试';
                 errorDiv.classList.add('show');
-                document.getElementById('token').value = '';
-                document.getElementById('token').focus();
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '验证';
             }
         });
     </script>

@@ -51,6 +51,11 @@ spring:
       spec: maximumSize=10000,expireAfterWrite=10m
 
 # 应用配置
+app:
+  access:
+    token: shijin
+    header: X-Access-Token
+
 bt-search:
   sync:
     enabled: true

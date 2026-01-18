@@ -210,6 +210,19 @@
     </div>
 
     <script th:inline="none">
+        // Token verification - check on page access
+        (function() {
+            const storedToken = localStorage.getItem('access_token');
+
+            // If token is missing, redirect to token page
+            // (Actual validation happens on backend API calls)
+            if (!storedToken) {
+                const currentUrl = encodeURIComponent(window.location.href);
+                window.location.href = '/token?redirect=' + currentUrl;
+                return; // Stop execution
+            }
+        })();
+
         let torrentData = null;
         let currentFilePage = 1;
         const FILE_PAGE_SIZE = 100;

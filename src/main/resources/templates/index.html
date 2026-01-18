@@ -1046,6 +1046,8 @@
                 }
                 itemHtml += '</div>';
 
+                itemHtml += '<button class="magnet-link" onclick="copyMagnet(\'' + item.magnetUri + '\', this)">🧲 复制磁力链接</button>';
+
                 if (hasFiles) {
                     const onClickAttr = isMobile
                         ? "viewDetail('" + item.infoHash + "')"
@@ -1064,7 +1066,6 @@
                     }
                 }
 
-                itemHtml += '<button class="magnet-link" onclick="copyMagnet(\'' + item.magnetUri + '\', this)">🧲 复制磁力链接</button>';
                 itemHtml += '</div>';
 
                 html += itemHtml;

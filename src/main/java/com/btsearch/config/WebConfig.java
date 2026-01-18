@@ -18,9 +18,16 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 只拦截 API 请求，前端页面自己验证 token
+        // 拦截 API 请求，但排除公开接口
+        // 公开接口：health check, stats, search, torrent detail
         registry.addInterceptor(tokenInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/actuator/**", "/api/v1/health");
+                .excludePathPatterns(
+                        "/actuator/**",
+                        "/api/v1/health",
+                        "/api/v1/stats",
+                        "/api/v1/search",
+                        "/api/v1/torrents/*"
+                );
     }
 }

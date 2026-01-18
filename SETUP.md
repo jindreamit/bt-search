@@ -45,3 +45,21 @@ docker run -d --name bt-sync-app --network host \
 # 查看日志
 docker logs -f bt-sync-app
 ```
+
+## 部署流程
+
+### 修改代码后重新部署
+
+**重要：** 只重新构建和部署Java工程，不要删除Elasticsearch容器，以保留索引数据。
+
+```bash
+# 只重建Java应用
+docker-compose up -d --build bt-search
+```
+
+### 注意事项
+- **不需要删除** `bt-search-es` (Elasticsearch) 容器
+- **不需要删除** 数据卷 (`es-data`)
+- 只重建 `bt-search-app` 容器
+- 这样可以保留Elasticsearch的索引数据，避免每次都要重新索引
+

@@ -48,9 +48,41 @@ public class SearchService {
                             .fields("name", f -> f)
                             .fields("fileList.path", f -> f)
                     )
-                    .sort(srt -> srt
-                            .score(sc -> sc.order(SortOrder.Desc))
-                    )
+                    .sort(srt -> {
+                        // Determine sort field and order based on request
+                        String sortField = request.getSort();
+                        SortOrder sortOrder = "asc".equalsIgnoreCase(request.getOrder())
+                                ? SortOrder.Asc
+                                : SortOrder.Desc;
+
+                        // Relevance sorting (default) - use score
+                        if ("relevance".equals(sortField)) {
+                            return srt.score(sc -> sc.order(sortOrder));
+                        }
+                        // Sort by seeders count
+                        else if ("seeders".equals(sortField)) {
+                            return srt.field(f -> f
+                                    .field("seeders")
+                                    .order(sortOrder)
+                            );
+                        }
+                        // Sort by creation time
+                        else if ("time".equals(sortField)) {
+                            return srt.field(f -> f
+                                    .field("createTime")
+                                    .order(sortOrder)
+                            );
+                        }
+                        // Sort by size
+                        else if ("size".equals(sortField)) {
+                            return srt.field(f -> f
+                                    .field("size")
+                                    .order(sortOrder)
+                            );
+                        }
+                        // Default to relevance sorting
+                        return srt.score(sc -> sc.order(sortOrder));
+                    })
             );
 
             SearchResponse<TorrentDocument> response =

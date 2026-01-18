@@ -27,9 +27,9 @@ public class SearchRequest {
     private Integer size = 20;
 
     /**
-     * 排序字段：seeders, time, size
+     * 排序字段：relevance, seeders, time, size
      */
-    private String sort = "seeders";
+    private String sort = "relevance";
 
     /**
      * 排序方向：asc, desc

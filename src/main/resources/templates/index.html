@@ -121,6 +121,11 @@
             font-size: 14px;
             cursor: pointer;
         }
+        .filter select:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            background-color: #f5f5f5;
+        }
         .results {
             background: white;
             border-radius: 10px;
@@ -470,6 +475,7 @@
                 <div class="filter">
                     <label>排序:</label>
                     <select id="sort">
+                        <option value="relevance">相关性</option>
                         <option value="seeders">做种数</option>
                         <option value="time">时间</option>
                         <option value="size">大小</option>
@@ -517,7 +523,7 @@
 
         let currentPage = 1;
         let currentKeyword = '';
-        let currentSort = 'seeders';
+        let currentSort = 'relevance';
         let currentOrder = 'desc';
         let expandedFileLists = new Set();
         let fileListData = {};
@@ -857,7 +863,7 @@
             const params = new URLSearchParams(window.location.search);
             const keyword = params.get('q');
             const page = parseInt(params.get('p')) || 1;
-            const sort = params.get('s') || 'seeders';
+            const sort = params.get('s') || 'relevance';
             const order = params.get('o') || 'desc';
 
             if (keyword) {
@@ -1128,6 +1134,24 @@
 
         // Keyword input event - show/hide clear button
         document.getElementById('keyword').addEventListener('input', updateClearButton);
+
+        // Sort select change event - disable order select for relevance
+        const sortSelect = document.getElementById('sort');
+        const orderSelect = document.getElementById('order');
+
+        function updateOrderSelectState() {
+            if (sortSelect.value === 'relevance') {
+                orderSelect.disabled = true;
+                orderSelect.value = 'desc'; // Force desc for relevance
+            } else {
+                orderSelect.disabled = false;
+            }
+        }
+
+        sortSelect.addEventListener('change', updateOrderSelectState);
+
+        // Initialize order select state on page load
+        updateOrderSelectState();
 
         // Initialize
         setupBackToTop();

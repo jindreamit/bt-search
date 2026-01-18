@@ -599,10 +599,14 @@
         // Toggle file list
         function toggleFileList(id) {
             const element = document.getElementById(id);
+            const button = element.previousElementSibling.querySelector('button');
+
             if (element.classList.contains('active')) {
                 element.classList.remove('active');
+                button.textContent = '📁 查看文件列表 (' + fileListData[id].files.length + ' 个文件)';
             } else {
                 element.classList.add('active');
+                button.textContent = '📁 收起文件列表';
                 // Re-render with current page to maintain state
                 const data = fileListData[id];
                 if (data) {

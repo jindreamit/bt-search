@@ -36,6 +36,7 @@ public class EsSyncService {
     private static final int BATCH_SIZE = 500;
     private static final int QUERY_SIZE = 1000;
     private static final int SLEEP_INTERVAL_MS = 1000;
+    private static final int MAX_BATCH_BYTES = 50 * 1024 * 1024; // 50MB max per batch
 
     /**
      * 手动触发同步
@@ -83,6 +84,8 @@ public class EsSyncService {
 
                     List<IndexQuery> indexQueries = new ArrayList<>();
                     long batchMaxId = currentId;
+                    long batchBytes = 0;
+                    int recordsInBatch = 0;
 
                     for (Map<String, Object> row : rows) {
                         Long id = getLong(row.get("id"));
@@ -91,10 +94,32 @@ public class EsSyncService {
                         try {
                             TorrentDocument doc = buildDocument(row);
                             if (doc != null) {
+                                // Estimate document size (rough approximation)
+                                long docSize = estimateDocumentSize(doc);
+
+                                // If adding this doc would exceed batch limit, flush current batch
+                                if (!indexQueries.isEmpty() && batchBytes + docSize > MAX_BATCH_BYTES) {
+                                    elasticsearchTemplate.bulkIndex(indexQueries, TorrentDocument.class);
+                                    totalSynced += indexQueries.size();
+                                    log.info("Flushed batch: {} records, {} bytes, current_id={}, total_synced={}",
+                                        indexQueries.size(), formatBytes(batchBytes), currentId, totalSynced);
+                                    indexQueries.clear();
+                                    batchBytes = 0;
+                                    recordsInBatch = 0;
+                                }
+
                                 IndexQuery query = new IndexQuery();
                                 query.setId(doc.getInfoHash());
                                 query.setObject(doc);
                                 indexQueries.add(query);
+                                batchBytes += docSize;
+                                recordsInBatch++;
+
+                                // Update sync record periodically
+                                if (recordsInBatch >= BATCH_SIZE) {
+                                    updateSyncRecord(currentId);
+                                    recordsInBatch = 0;
+                                }
                             }
                         } catch (Exception e) {
                             log.error("Failed to process record id={}: {}", id, e.getMessage(), e);
@@ -102,19 +127,16 @@ public class EsSyncService {
                         }
                     }
 
+                    // Flush remaining documents
                     if (!indexQueries.isEmpty()) {
                         elasticsearchTemplate.bulkIndex(indexQueries, TorrentDocument.class);
                         totalSynced += indexQueries.size();
-                        log.info("Synced batch: {} records, current_id={}, batch_max_id={}, total_synced={}, errors={}",
-                            indexQueries.size(), currentId, batchMaxId, totalSynced, errorCount);
+                        log.info("Flushed final batch: {} records, {} bytes, current_id={}, batch_max_id={}, total_synced={}, errors={}",
+                            indexQueries.size(), formatBytes(batchBytes), currentId, batchMaxId, totalSynced, errorCount);
                     }
 
                     currentId = batchMaxId;
-
-                    if (indexQueries.size() >= BATCH_SIZE) {
-                        updateSyncRecord(currentId);
-                    }
-
+                    updateSyncRecord(currentId);
                     Thread.sleep(SLEEP_INTERVAL_MS);
 
                 } catch (Exception e) {
@@ -248,6 +270,48 @@ public class EsSyncService {
     }
 
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
+
+    /**
+     * 估算文档大小（字节数）用于批量控制
+     */
+    private long estimateDocumentSize(TorrentDocument doc) {
+        long size = 0;
+        // Base document overhead
+        size += 100;
+
+        // Info hash
+        size += doc.getInfoHash() != null ? doc.getInfoHash().length() * 2 : 40;
+
+        // Name
+        size += doc.getName() != null ? doc.getName().length() * 3 : 100;
+
+        // Magnet URI
+        size += doc.getMagnetUri() != null ? doc.getMagnetUri().length() * 2 : 200;
+
+        // File list (major contributor)
+        if (doc.getFileList() != null) {
+            for (FileInfo file : doc.getFileList()) {
+                size += file.getPath() != null ? file.getPath().length() * 3 : 100;
+                size += 20; // size field overhead
+            }
+        }
+
+        // Other fields
+        size += 50; // metadata overhead
+
+        return size;
+    }
+
+    /**
+     * 格式化字节数为可读格式
+     */
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes < 1024L * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
+    }
+
     private String bytesToHex(byte[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
         for (int j = 0; j < bytes.length; j++) {

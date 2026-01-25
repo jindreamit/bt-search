@@ -164,11 +164,10 @@ public class EsSyncService {
      */
     public void updateSyncRecord(long maxId) {
         try {
-            // 使用 INSERT ... ON DUPLICATE KEY UPDATE 语法
-            // 这样可以同时处理插入和更新，且不需要 JPA 事务
+            // 使用 id=1 作为固定主键，确保只保留一条记录
             int updated = jdbcTemplate.update(
-                "INSERT INTO torrent_sync_record (max_synced_id, last_sync_time) " +
-                "VALUES (?, NOW()) " +
+                "INSERT INTO torrent_sync_record (id, max_synced_id, last_sync_time) " +
+                "VALUES (1, ?, NOW()) " +
                 "ON DUPLICATE KEY UPDATE max_synced_id = VALUES(max_synced_id), last_sync_time = VALUES(last_sync_time)",
                 maxId
             );

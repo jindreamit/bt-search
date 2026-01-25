@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 public class SyncRecord {
 
     @Id
+    private Long id = 1L;  // 固定主键，始终为 1
+
     @Column(name = "max_synced_id")
     private Long maxSyncedId;
 
@@ -19,8 +21,17 @@ public class SyncRecord {
     }
 
     public SyncRecord(Long maxSyncedId, LocalDateTime lastSyncTime) {
+        this.id = 1L;
         this.maxSyncedId = maxSyncedId;
         this.lastSyncTime = lastSyncTime;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public Long getMaxSyncedId() {

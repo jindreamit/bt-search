@@ -11,11 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface SyncRecordRepository extends JpaRepository<SyncRecord, Long> {
 
-    @Query(value = "SELECT * FROM torrent_sync_record ORDER BY last_sync_time DESC LIMIT 1", nativeQuery = true)
+    @Query("SELECT s FROM SyncRecord s WHERE s.id = 1")
     SyncRecord getSyncRecord();
 
     @Modifying
     @Transactional
-    @Query("UPDATE SyncRecord s SET s.maxSyncedId = :maxId, s.lastSyncTime = CURRENT_TIMESTAMP")
+    @Query("UPDATE SyncRecord s SET s.maxSyncedId = :maxId, s.lastSyncTime = CURRENT_TIMESTAMP WHERE s.id = 1")
     void updateSyncRecord(@Param("maxId") Long maxId);
 }

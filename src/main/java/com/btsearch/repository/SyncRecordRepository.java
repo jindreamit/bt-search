@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface SyncRecordRepository extends JpaRepository<SyncRecord, Long> {
 
-    @Query("SELECT s FROM SyncRecord s")
+    @Query(value = "SELECT * FROM torrent_sync_record ORDER BY last_sync_time DESC LIMIT 1", nativeQuery = true)
     SyncRecord getSyncRecord();
 
     @Modifying

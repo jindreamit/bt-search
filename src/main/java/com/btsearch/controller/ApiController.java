@@ -3,6 +3,8 @@ package com.btsearch.controller;
 import com.btsearch.model.document.TorrentDocument;
 import com.btsearch.model.dto.SearchRequest;
 import com.btsearch.model.dto.SearchResult;
+import com.btsearch.model.entity.SyncRecord;
+import com.btsearch.repository.SyncRecordRepository;
 import com.btsearch.service.SearchService;
 import com.btsearch.service.SyncService;
 import jakarta.validation.Valid;
@@ -35,6 +37,12 @@ public class ApiController {
 
     @Autowired
     private ElasticsearchOperations elasticsearchOperations;
+
+    @Autowired
+    private SyncRecordRepository syncRecordRepository;
+
+    private static final java.time.format.DateTimeFormatter DATE_FORMATTER =
+        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * 搜索接口
@@ -89,6 +97,16 @@ public class ApiController {
 
             // 这里可以添加更多统计信息
             stats.put("syncProgress", syncService.getSyncProgress());
+
+            // 获取最后同步时间
+            try {
+                SyncRecord syncRecord = syncRecordRepository.getSyncRecord();
+                if (syncRecord != null && syncRecord.getLastSyncTime() != null) {
+                    stats.put("lastSyncTime", syncRecord.getLastSyncTime().format(DATE_FORMATTER));
+                }
+            } catch (Exception e) {
+                log.debug("No sync record found or failed to get sync record", e);
+            }
 
             return ResponseEntity.ok(stats);
         } catch (Exception e) {

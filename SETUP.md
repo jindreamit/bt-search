@@ -50,16 +50,50 @@ docker logs -f bt-sync-app
 
 ### 修改代码后重新部署
 
-**重要：** 只重新构建和部署Java工程，不要删除Elasticsearch容器，以保留索引数据。
+**⚠️ 重要：** 只重新构建和部署 Java 工程，不要重建 Elasticsearch 容器！
+
+**原因**：
+1. **保留索引数据** - ES 容器重建会丢失所有索引数据（1000万+种子）
+2. **保留 IK 分词器插件** - 容器重建后插件会丢失，导致集群状态变为 red
+
+**正确命令**：
+```bash
+# 只重建 Java 应用（推荐）
+docker compose -f docker-compose.yml up -d --build bt-search
+
+# 或者使用 docker-compose（旧语法）
+docker-compose -f docker-compose.yml up -d --build bt-search
+```
+
+### ⚠️ ES 容器重建后的恢复步骤
+
+如果不小心重建了 ES 容器，需要重新安装 IK 分词器：
 
 ```bash
-# 只重建Java应用
-docker-compose up -d --build bt-search
+# 1. 复制插件到容器
+docker cp /mnt/nvme/app/bt-search/elasticsearch-analysis-ik-8.11.0.zip bt-search-es:/tmp/
+
+# 2. 安装插件
+docker exec bt-search-es elasticsearch-plugin install file:///tmp/elasticsearch-analysis-ik-8.11.0.zip -b
+
+# 3. 重启 ES
+docker restart bt-search-es
+
+# 4. 等待 ES 启动完成（约 10-15 秒）
+sleep 10
+
+# 5. 验证集群状态（应该是 green）
+curl -s http://localhost:9200/_cluster/health?pretty
 ```
+
+**症状识别**：
+- ES 集群状态为 `red`
+- 日志出现：`Custom Analyzer [ik_max_word_analyzer] failed to find tokenizer under name [ik_max_word]`
+- 网页搜索功能异常
 
 ### 注意事项
 - **不需要删除** `bt-search-es` (Elasticsearch) 容器
 - **不需要删除** 数据卷 (`es-data`)
 - 只重建 `bt-search-app` 容器
-- 这样可以保留Elasticsearch的索引数据，避免每次都要重新索引
+- 这样可以保留 Elasticsearch 的索引数据和已安装的插件
 

@@ -546,8 +546,11 @@
             try {
                 const response = await fetchWithToken('/api/v1/stats');
                 const data = await response.json();
-                document.getElementById('stats').textContent =
-                    `已索引 ${data.totalTorrents.toLocaleString()} 个种子`;
+                let statsText = `已索引 ${data.totalTorrents.toLocaleString()} 个种子`;
+                if (data.lastSyncTime) {
+                    statsText += `<br><span style="font-size: 0.85em; opacity: 0.8;">最近同步: ${data.lastSyncTime}</span>`;
+                }
+                document.getElementById('stats').innerHTML = statsText;
             } catch (error) {
                 console.error('Failed to load stats:', error);
             }
